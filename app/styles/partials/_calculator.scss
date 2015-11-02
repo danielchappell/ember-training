@@ -1,0 +1,101 @@
+$calc-button-height: 4rem;
+$calc-register-height: 8em;
+$calc-whitespace: 6px;
+
+.calculator-wrapper {
+    margin-top: 1.618em;
+}
+
+.calculator-container {
+    @extend .white;
+
+    border-radius: 5px;
+    padding: $calc-whitespace $calc-whitespace 0;
+    position: relative;
+
+    button {
+        @extend .blue-grey.lighten-5;
+
+        display: block;
+        font-size: 1.618rem;
+        height: $calc-button-height;
+        line-height: 1em;
+        padding: 0;
+        width: 100%;
+    }
+
+    .number-container button {
+        @extend .light-blue.lighten-5;
+
+        &.btn-equals {
+            @extend .light-blue.lighten-1;
+            @extend .white-text;
+
+            &.disabled {
+                @extend .blue-grey.lighten-5;
+                @extend .blue-grey-text.text-lighten-4;
+            }
+        }
+    }
+
+    .function-container,
+    .custom-container {
+        button {
+            &.active,
+            &:focus {
+                @extend .blue-grey.darken-3;
+                @extend .grey-text.text-darken-2;
+            }
+        }
+    }
+
+    .register-tape {
+        border: dotted #b0bec5 1px;
+        border-radius: 3px;
+        box-shadow: inset #90a4ae 0 0 3px;
+        height: 7.2em;
+        overflow: hidden;
+        overflow-y: auto;
+
+        .register-window {
+            display: table;
+            min-height: 7.2em;
+            width: 100%;
+
+            .register-content {
+                display: table-cell;
+                padding: 0;
+                vertical-align: bottom;
+                white-space: normal;
+            }
+        }
+
+        .keep-register-link {
+            position: absolute;
+            left: $calc-whitespace * 2;
+            top: $calc-whitespace * 2;
+        }
+    }
+
+    .screen {
+        border-radius: 3px;
+        height: $calc-button-height;
+        font-size: 2.618rem;
+        overflow: hidden;
+        overflow-x: auto;
+        padding: 0 ($calc-whitespace * 1.618);
+        width: 100%;
+    }
+
+    /**
+        Adjust Materialize grid for calculator (reduce whitespace)
+     */
+    .row {
+        margin: 0 -3px $calc-whitespace;
+
+        .col {
+            padding: 0 3px;
+        }
+    }
+
+}

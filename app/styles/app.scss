@@ -1,0 +1,34 @@
+@import "materialize";
+
+%register-text {
+    font-family: monospace;
+    line-height: 1.2em;
+    text-align: right;
+    white-space: pre;
+}
+
+html {
+    @extend .blue-grey.lighten-5;
+    @extend .blue-grey-text.text-darken-4;
+}
+
+pform {
+    padding-bottom: 30px;
+}
+
+h1 {
+    font-size: 2.618rem;
+}
+
+.modal.bottom-sheet {
+    form {
+        padding-bottom: 0;
+    }
+}
+
+.error-message {
+  @extend .red-text.text-darken-1;
+}
+
+@import 'partials/register-tape';
+@import 'partials/calculator';

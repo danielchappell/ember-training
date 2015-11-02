@@ -1,0 +1,13 @@
+
+.register-content {
+    font-family: monospace;
+    font-size: 1.2em;
+    line-height: 1.4em;
+    padding: 0 6px 3px;
+    text-align: right;
+    white-space: pre;
+
+    &.large {
+        font-size: 1.4rem;
+    }
+}
