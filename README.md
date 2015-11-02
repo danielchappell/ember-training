@@ -844,3 +844,208 @@ inputOperator(fnName) {
 ```
 
 These are the two methods where we print to the register. The first method for 'equals' and other unary operators, and the second method prints something every time. Don't forget to add the registerPrintValue assignment expression in the inputOperator method!
+
+### improving the clear button functionality
+
+We should have a way to clear the register and start fresh. Its not exactly what normal calculators do but I decided that the clear button should clear the current total and loaded functions, while maintaining the register history (what we are already doing). However if the runningTotal is clear (equal to '0' we can assume we have already cleared once) the clear button will then reset the register.
+
+Lets make the change to the clearDisplay action:
+
+```javascript
+clearDisplay() {
+    if (this.get('runningTotal') === '0') {
+        this.set('registerTape', '');
+    } else {
+        this.set('registerTape', this.get('registerTape').concat('\n\nCLEAR\n'));
+    }
+    this.setProperties({
+        runningTotal: '0',
+        loadedFn: null,
+        fnName: null,
+        operand: '',
+        currentTotalFrozen: false
+    });
+}
+```
+
+The function above does what I just describe with one other bit of functionality (it adds 'CLEAR' to the register) if only clearing the total. We should also update the clear button to display an appropriate label for what action it will do, clear total or clear register. Again this is another calculation and a computed property is a perfect choice.
+
+```javascript
+clearCurrent: Ember.computed('runningTotal', function() {
+    return this.get('runningTotal') !== '0'  ? "C" : "CR";
+})
+```
+
+```handlebars
+    <button class="btn-flat btn-clear waves-effect waves-light" {{action "clearDisplay"}}>{{clearCurrent}}</button>
+```
+
+## Register Tape an Ember Component
+
+We now have a string property (registerTape) on our controller that represents our register with all the line breaks. But there is more logic that we need to display it correctly, and it makes sense to isolate that logic because it only has to do with showing the register.
+
+This is our first use case for creating a component. A component as you have read in the ember guides. Is very similar to a controller, but isolated and nestable. A component should be self sufficent piece of the UI with an interface in which it receives data from the controller or a parent component.
+
+lets generate our component back in the shell:
+
+```bash
+$ ember generate component register-tape
+```
+
+Ember should have generated a js file, a template file, and a test file.
+
+
+## A few more difference Components vs. Templates/Controllers
+
+Components are different currently in a number of ways. Currently components (thier tempalates) when rendered are wrapped in an outer element, ember uses this to manage the component. By default this element is a div but it can be configured to be whatever tag type you would like with the 'tagName' property. You can also pass in classes or attributes to decorate the element.
+
+```javascript
+export default Ember.Component({
+tagName: 'button',
+classNames: ['foo', 'bar']
+});
+```
+
+A component also has some hooks related to rendering, that are not available on the route or the controller, which is a big advantage of using a component.
+
+##### minor aside
+
+This isn't a gap in the framework persay, Ember has a deprecated concept Ember.View which has this functionality for use with controllers. But we are transition to use components more and soon you will actually route a component.
+
+##### end of aside
+
+The component hooks are:
+
+didInsertElement: Fires when the root component element has been rendered into the DOM.
+
+willInsertElement: Fires right before the element is inserted into the DOM but after the element is created. (available at this.get('element') )
+
+willDestroyElement: Fired when component is being removed from the DOM. This is where you want to do manual tear down of observers if you use that sort of thing..
+
+The most notable reason to use these hooks is for writing external library code. That's right, so far ember has covered everything; but there are times includeing once coming up in our app where you have to modify the DOM explicitly, or use an external library like D3.js, The didInsertElement hook is one of the best places for that logic since it is fired at a safe point in the ember run loop (more on the run loop later).
+
+## Coding up Register Tape Component
+
+Go to your register-tape.js file and plug in this code.
+
+```javascript
+import Ember from 'ember';
+
+export default Ember.Component.extend({
+    classNames:['register-tape white'],
+    register: null,
+
+    registerDisplay: Ember.computed('register', function() {
+        var register = this.get('register') || '';
+        return register.trim().replace(/(\n)+/g, '<br />');
+    }),
+
+    _scrollRegister: Ember.observer('register', function() {
+        Ember.run.schedule('afterRender',this, function() {
+            let elem$ = this.$(this.element);
+            elem$.scrollTop(elem$.prop('scrollHeight'));
+        });
+    }),
+
+    didInsertElement() {
+        this._scrollRegister();
+    }
+});
+```
+
+When defining a component we declare the properties that will be passed in on instantiation (either with null values or other defaults). In this case we will pass register from the controller to be formatted and displayed.
+
+We had some difficulty getting the register to display correctly with the line breaks, along with the other fancy stuff we are asking it to do like over flow and auto scroll. So we made a computed property to replace all the line breaks with '&lt;br&gt;' tags. I'll except a pull request for a better solution on this one, but for now it can server as another computed property example where we take data and transform it as it changes, with some calculation. registerDisplay in the code example above does this.
+
+Now lets write our template markup:
+
+```handlebars
+<div class="register-window">
+    <div class="register-content">
+        {{{registerDisplay}}}
+    </div>
+</div>
+```
+
+Here we are using triple brackets instead of the normal two, that is because we are inserting html the br tags and we dont' want this sanitized. This is not a very secure solution as someone could get html inject into the app this way, perhaps with out the user knowing, however I have already confessed to this part not being the best. Moving along.
+
+There were some other functions in our component we defined above, the first example in this app of having to use an Ember.observer. There are a couple of best practices I encourage when using Ember.observers. First use them as little as possible, most observation is a result of user interaction and can be handled in a safer, more obviously way, with actions. Secondly I recomend when you do need to use them, make them as obvious as possible in your code. The are very different from computed properties, but their sytnax is very similar. I really wish they looked a bit more different as I see this trip alot of developers up.
+
+I put an _ in front of my observers, to help me notice them and they are always private anyway so that works out. You can also call the property associated with an ember observer to fire the function, as we are doing here in the didInsertElement hook. I have not seen this documented in the guides but it seems like intentional behavior to me, and I judge it save to use!
+
+The reason we need to call the observer function manually in the didInsertElement hook is observers are not fired when values are changed on intialization. For example when we create the component and pass a register to our register property changing it from null to something. That will not fire the observer (which we need it to fire) But changes all other changes after initialization will fire. Thanks observer!
+
+The didInsertElement hook helps us get around this by firing the function at the point in the runloop when we know it is safe to assume register is initially set and has just been rendered.
+
+Inside the observer function I have wrapped my jquery code in a Ember.run.schedule I am not going to go into too much detail on the run loop, because 1. it is a something that 90% of the time just works and you don't need to mess with it. and 2. I can recommend some better reading on it, than I could write up within the scope of this article.
+
+For full mastery of the Ember runloop checkout:
+* [Ember Guides RunLoop](http://guides.emberjs.com/v2.1.0/applications/run-loop/)
+* [Ember Run Loop Handbook](https://github.com/eoinkelly/ember-runloop-handbook)
+
+To explain what I am doing here, with Ember.run.schedule('afterRender', func) I am saying schedule this function to run in the next runloop iteration after the render jobs. Which ensures that the bindings have synced and changes have been rendered in the DOM which is what I want since I am using jQuery to manipulate the DOM.
+
+By the way this function is autoscrolling the register-tape div that is overflowing with register data. That way we are always seeing the bottom of the data and can scroll up to see out of view register data.
+
+### initalizing the component
+
+Lets now use our component in the calculator.hbs file:
+
+Replace:
+
+```handlebars
+<div class="row">
+    <div class="col s12">
+        <!-- the register info will go here -->
+    </div>
+</div>
+```
+
+With:
+
+```handlebars
+<div class="row">
+    <div class="col s12">
+        {{register-tape register=registerTape}}
+    </div>
+</div>
+```
+
+#### Take a break to try the app so far...
+
+
+### refactoring our calculator buttons
+
+All the boiler plate that makes up our calculator buttons has been bugging me. I think we can make it a bit cleaner and get rid of some of the redundancy by turning it into a button component. This isn't the most dramatic refactoring you can get with a component, but when you see that things all have the same tag name and the same classes and have the same sort of behavior that is a good indication you can clean things up a bit. However this is an example and I'm not encouraging you to prematurely optimze your whole app, only when when the benefits surface should you start to engineer more intricate solutions.
+
+Generate your component:
+
+```bash
+$ ember generate component calc-button
+```
+
+Here is the component code:
+
+```javascript
+import Ember from 'ember';
+
+export default Ember.Component.extend({
+    isDisabled: false,
+    tagName: 'button',
+    classNames: ['btn-flat', 'waves-effect', 'waves-light'],
+    classNameBindings: ['isDisabled:disabled'],
+    attributeBindings: ['isDisabled:disabled'],
+    click() {
+        this.sendAction('action');
+    }
+});
+```
+
+### Component Events
+
+In addition to actions you can also define functions on components that have the name of a browser event like I did above with click. The benefit of this is by passing the action step (you could otherwise write {{action on="click"}} and write it as an action". When defining browser event functions they should be placed outside the actions hash. Browser actions have the normal DOM behavior of bubbling until they are handled. If you wish to continue to bubble either an action or a browser event you can return true. Since actions and event functions are essentially call backs that only mutate code, and have no return value, we can effectivey use the return value as bubbling control flow.
+
+In the example above you see we have customized the tagName to wrap the compoent as a button, and also use the classNames property to get rid of those boilerplate classes we were having to type everytime. slassNameBindings and attributeBindings work the same way. The code above reads if isDisabled is true add the disabled class and add the disabled attribute.
+
+
+### Sending Actions from Components. Bubbling vs. Closure actions
