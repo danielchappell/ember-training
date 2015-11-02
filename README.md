@@ -1100,7 +1100,7 @@ With:
 </div>
 ```
 
-#### Take a break to try the app so far...
+#####  Take a break to try the app so far...
 
 
 ### refactoring our calculator buttons
@@ -1125,7 +1125,7 @@ export default Ember.Component.extend({
     classNameBindings: ['isDisabled:disabled'],
     attributeBindings: ['isDisabled:disabled'],
     click() {
-        this.sendAction('action');
+        this.get('buttonAction')();
     }
 });
 ```
@@ -1136,5 +1136,108 @@ In addition to actions you can also define functions on components that have the
 
 In the example above you see we have customized the tagName to wrap the compoent as a button, and also use the classNames property to get rid of those boilerplate classes we were having to type everytime. slassNameBindings and attributeBindings work the same way. The code above reads if isDisabled is true add the disabled class and add the disabled attribute.
 
+Components auto generate a template file that looks like this:
+
+```handlebars
+{{yield}}
+```
+
+This works for our use case. Components can be invoked with a hash syntax (like handlebar if helpers) and will take a block (of HTML). The passed HTML will be inserted into the {{yield}} helper.
+
+Lets update our calculator.hbs to use our new component replacing the existing buttons:
+
+```handlebars
+    {{#calc-button isDisabled=cannotInputOperator buttonAction=(action "inputOperator" "powerOf"}}>x<sup>y</sup></button>
+    {{#calc-button isDisabled=cannotInputOperator buttonAction=(action "inputOperator" "factorial"}}> !</button>
+    {{#calc-button isDisabled=cannotInputOperator buttonAction=(action "inputOperator" "cos"}}>cos</button>
+    {{#calc-button isDisabled=cannotInputOperator buttonAction=(action "inputOperator" "sin"}}>sin</button>
+    {{#calc-button isDisabled=cannotInputNumber buttonAction=(action "inputNum" "7"}}>7</button>
+    {{#calc-button isDisabled=cannotInputNumber buttonAction=(action "inputNum" "8"}}>8</button>
+    {{#calc-button isDisabled=cannotInputNumber buttonAction=(action "inputNum" "9"}}>9</button>
+    {{#calc-button isDisabled=cannotInputNumber buttonAction=(action "inputNum" "4"}}>4</button>
+    {{#calc-button isDisabled=cannotInputNumber buttonAction=(action "inputNum" "5"}}>5</button>
+    {{#calc-button isDisabled=cannotInputNumber buttonAction=(action "inputNum" "6"}}>6</button>
+    {{#calc-button isDisabled=cannotInputNumber buttonAction=(action "inputNum" "1"}}>1</button>
+    {{#calc-button isDisabled=cannotInputNumber buttonAction=(action "inputNum" "2"}}>2</button>
+    {{#calc-button isDisabled=cannotInputNumber buttonAction=(action "inputNum" "3"}}>3</button>
+    {{#calc-button isDisabled=cannotInputNumber buttonAction=(action "inputNum" "."}}>.</button>
+    {{#calc-button isDisabled=cannotInputNumber buttonAction=(action "inputNum" "0"}}>0</button>
+    {{#calc-button isDisabled=cannotInputOperator buttonAction=(action "inputOperator" "equal"}}>=</button>
+    {{#calc-button isDisabled=cannotInputOperator buttonAction=(action "inputOperator" "divide"}}>÷</button>
+    {{#calc-button isDisabled=cannotInputOperator buttonAction=(action "inputOperator" "multiply"}}>×</button>
+    {{#calc-button isDisabled=cannotInputOperator buttonAction=(action "inputOperator" "subtract"}}>-</button>
+    {{#calc-button isDisabled=cannotInputOperator buttonAction=(action "inputOperator" "add"}}>+</button>
+```
+
 
 ### Sending Actions from Components. Bubbling vs. Closure actions
+
+Earlier I mentioned that a key difference in components is that they are have a completely isolated scope. Specifically this means that anything the component uses or interacts with must be explicitly passed into the component, normally on initialization. This includes actions, which outside of components bubble to the route, and then up the nested route structure until they are handled. In components however if an action is invoked it must be handled on the route. There is an explicit way to invoke an action that is passed in to a component.
+
+In our example above we could have done:
+
+```handlebars
+{{#calc-button buttonAction="inputNum" buttonType="add"}}+{{/calc-button}}
+```
+
+```javascript
+import Ember from 'ember';
+
+export default Ember.Component.extend({
+    isDisabled: false,
+    buttonType: null,
+    tagName: 'button',
+    classNames: ['btn-flat', 'waves-effect', 'waves-light'],
+    classNameBindings: ['isDisabled:disabled'],
+    attributeBindings: ['isDisabled:disabled'],
+    click() {
+        this.sendAction('buttonAction', this.get('buttonType'));
+    }
+});
+```
+
+This is the old way to do actions, it requires you to pass in the action as a string under a property name that will be passed to the sendAction method. This method is the only way to trigger actions outside a component on ember versions before 1.13
+
+**Note before we were using send to call actions which will bubble when not inside a component. The send method also checks the current object first for the function before trying the parent context. sendAction on the other hand goes straight to the parent component or controller, and is used to send an actions outside the current component."**
+
+The major benefit to makign components work this way is you are required to utilize an interface for invoking methods outside a component, this allows us to avoid relying on bubbling which would often make a component less reusable.
+
+There is a new better sytanx which we used above, in the actual code I had you write in our app. In that example we pass our action to a property name, but instead of it being a string we use the action subexpression (action 'args..')  which actually resolves to a the action(function) itself.
+
+Then on the component when you wish to invoke the function you just access it as a normal property (via get) and invoke it like a function. One great benefit to this syntax presents itself with multiple nested components. You still have to pass the function down each level to the inner component when it executes the function at the lowest level, it is an enclosed function with the original top level context.
+
+If you were doing this with the older sendAction way, you would need to invoke a sendAction at each level bubbling up the invocation all the way to the top controller.
+
+Finally one thing that is less convienent about the new syntax you should be aware of. The (action 'blah) subexpression only looks at the current context for a given action to enclose. That means you cannot rely on bubbling when using the new syntax. However we get to do awesome things like we did in calc-button where we use (action 'inputNum' '3') to partially apply 3 at the outer level, and can just execute the function with the arguments already loaded. This makes our component interface poentially much more flexable.
+
+### Quick Ember-Data setup!
+
+Ember does not specify what your model should be or what means you use to fetch your model. Ember has first class support for an additional libary called Ember-Data which is the defacto standard for models and communicating with the server in most modern ember apps.
+
+Ember-Data is a client side ORM that allows you to setup relationships between your object and model them close to the database schema, it also handles all the XHR requests automatically.
+
+Ember-Data definitely kicks ember up another notch on the opinonated framework/magical code happening scale, but it is not required and is only as of 2015 reaching maturity and semantic version stabelization.
+
+It is common with older ember apps to just use jquery or XMLHttpRequest and convert the JSON to be your model wrapping it in an Ember.Object. Later in this training we will be building an application to solidify the Ember concepts discussed, for simplicity sake we will be using Ember.Data.
+
+
+While ember does not require you to return an Ember.Object as your model,and in some cases it might not be necessary, in general a model that is simply a javascript object literal (POJO) will not allow your model much felxibillity and will limit its robustness. Returning an Ember.Object as your model allows you to take full advantage of the ember system of observation, and enables you to write computed properties that can describe your model attributes.
+
+To setup Ember-Data with our app we have to extend the the RESTAdapter to include our host and namespace. Ember-Data will figure out the rest of the URL based on REST conventions, if you aren't following those conventions you will have to select a different adaptor, or write your own.
+
+Generate an application adaptor with ember-cli:
+
+```bash
+$ ember generate adapter application
+```
+
+now add the host and namespace property to your app/adaptors/application.js:
+
+```javascript
+import DS from 'ember-data';
+
+export default DS.RESTAdapter.extend({
+    host: 'https://ember-calc.herokuapp.com',
+    namespace: 'api/v1'
+});
+```
