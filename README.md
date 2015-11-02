@@ -6,7 +6,7 @@ A hands on guide to writting idomatic Ember.
 
 This training guide and app was build and designed by Daniel Chappell and Kevin Boucher. Both this guide and the source code for the app are open source and completely free.
 
-Please open an issue or submit a pull request for clairification or correction. Nothing is perfect with out help from the community, Thanks!
+Please open an issue or submit a pull request for clarification or correction. Nothing is perfect with out help from the community, Thanks!
 
 ## Prerequesites
 
@@ -684,7 +684,7 @@ Sweet!
 
 ### weren't we going to display something...
 
-Oh yeah, I guess we should dos something with that display property we declared as null right at the start. Find you code that looks like this in calculator.hbs
+Oh yeah, I guess we should do something with that display property we declared as null right at the start. Find you code that looks like this in calculator.hbs
 
 ```handlebars
 <div class="screen blue-grey darken-4 white-text right-align">
@@ -711,7 +711,7 @@ Computed properties are pure functions that return a calculation that is based o
 
 There are also built in computed properties, that add alot of functionality in a single line, we are about to use some of those now.
 
-### Indicating the curring operation
+### Indicating the current operation
 
 We need a way to know if we are current inputing the second number for addition or division. You know we don't have great memories, and we aren't showing the operator symbol in the display, Why? Because the apple calculator didn't! Anyway lets write some computed properties and template code to have the current function button highlighted:
 
@@ -748,9 +748,99 @@ Lets do the same for operators:
 
 ```javascript
 hasLoadedFunction: Ember.computed.bool('loadedFn'),
-cannotInputOperator: Ember.computed('hasLoadedFunction', 'operand','hasSufferedError', function() {
-    return this.get('hasLoadedFunction') && !this.get('operand') || this.get('hasSufferedError');
+cannotInputOperator: Ember.computed('hasLoadedFunction', 'operand', function() {
+    return this.get('hasLoadedFunction') && !this.get('operand');
 }),
 canInputOperator: Ember.computed.not('cannotInputNumber'),
 cannotInputEqualOperator: Ember.computed.or('cannotInputOperator', 'currentTotalFrozen')
 ```
+
+Here we have a ember.computed.bool which converts the 'loadedFn' to a booleans (functions always evaluate to true), we use this to know if we can input an operator. The only time we cannot input an operator is if we have a loadedFn but we do not yet have an operand (second number). The code above in cannotInputOperator watches both hasLoadedFunction and operand to determine when this is true.
+
+Additionally with the equal operator we cannot use it, if a total has already been calculated which is indicated by the 'currentTotalFrozen' property. Here we use an ember.computed.or to return true if either condition/property is true. These logical computed properties are very helpful Ember provides a number of them:
+
+* Ember.computed.and('prop1', 'prop2', 'prop3',...)
+* Ember.computed.or('prop1', 'prop2', 'prop3',...)
+* Ember.computed.bool('prop1')
+* Ember.computed.not('prop1')
+* You can use Ember.readOnly('prop1') if prop1 is already a boolean.
+
+Lets update the template to disable the buttons when their operation is not allowed:
+
+```handlebars
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputOperator}} {{action "inputOperator" "powerOf"}}>x<sup>y</sup></button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputOperator}} {{action "inputOperator" "factorial"}}>!</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputOperator}} {{action "inputOperator" "cos"}}>cos</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputOperator}} {{action "inputOperator" "sin"}}>sin</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputNumber}} {{action "inputNum" "7"}}>7</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputNumber}} {{action "inputNum" "8"}}>8</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputNumber}} {{action "inputNum" "9"}}>9</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputNumber}} {{action "inputNum" "4"}}>4</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputNumber}} {{action "inputNum" "5"}}>5</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputNumber}} {{action "inputNum" "6"}}>6</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputNumber}} {{action "inputNum" "1"}}>1</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputNumber}} {{action "inputNum" "2"}}>2</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputNumber}} {{action "inputNum" "3"}}>3</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputNumber}} {{action "inputNum" "."}}>.</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputNumber}} {{action "inputNum" "0"}}>0</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputEqualOperator}} {{action "inputOperator" "equal"}}>=</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputOperator}} {{action "inputOperator" "divide"}}>÷</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputOperator}} {{action "inputOperator" "multiply"}}>×</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputOperator}} {{action "inputOperator" "subtract"}}>-</button>
+    <button class="btn-flat waves-effect waves-light" disabled={{cannotInputOperator}} {{action "inputOperator" "add"}}>+</button>
+```
+
+Ok now the computed properties will autmatically controller the disabled attribute on our html buttons. We are winning!
+
+### Adding the printing functionality
+
+So far I have been ignoring the register part of the calculator that prints a ledger/register as we go. Most all of the code to add this functionality will be added to methods we have already written, lets get it working so we can move on. No great ember lessons here, just select places we all the set the registerTape property with a new concatenation to add the next line.
+
+First declare the property:
+
+```javascript
+registerTape: ''
+```
+
+now update this method:
+
+```javascript
+_updateAndPrintRunningTotal(newRunningTotal) {
+    this.setProperties({runningTotal: newRunningTotal,
+        currentTotalFrozen: true,
+        registerTape: this.get('registerTape').concat(`\n----------- \n${newRunningTotal}  \n`)
+    });
+}
+```
+
+and this method:
+
+```javascript
+inputOperator(fnName) {
+    let {loadedFn,
+        operand,
+        runningTotal,
+    registerTape} = this.getProperties(['loadedFn', 'operand', 'runningTotal', 'registerTape']);
+    //Only the first register line will use runningTotal
+    //If fn is = after a unary operator don't print a value;
+    let registerPrintValue = operand || fnName !== 'equal' && runningTotal || '';
+
+    if (loadedFn) {
+    runningTotal = loadedFn(+operand);
+
+    this.setProperties({runningTotal,
+        loadedFn: null,
+        fnName: null,
+        operand: ''
+        });
+    }
+
+    this.setProperties({registerTape: registerTape.concat(`\n${registerPrintValue} ${this._getOperatorSymbol(fnName)}`),
+    currentTotalFrozen: false
+    });
+
+    this.send(fnName, +runningTotal);
+    }
+```
+
+These are the two methods where we print to the register. The first method for 'equals' and other unary operators, and the second method prints something every time. Don't forget to add the registerPrintValue assignment expression in the inputOperator method!
