@@ -21,7 +21,7 @@ The primary motivation of this training is to demostrate the correct ember idoms
 * Controllers
 * Models
 
-## Dependancies
+## Dependencies
 
 Our app will utilize ember-cli which has the following depedencies:
 * [Phantom JS](phantomjs.org)
@@ -30,6 +30,95 @@ Our app will utilize ember-cli which has the following depedencies:
 
 Please also download:
 * [Ember Inspector](https://chrome.google.com/webstore/detail/ember-inspector/bmdblncegkenkacieihfhpjfppoconhi)
+
+## Ember Core Principles
+
+Some of the principles that drive the ember philosophy:
+
+1. There is a set of concerns that must be be addressed in every non-trivial web app no matter how different the business domain.
+
+2. There should be an extensible pattern or construct that can address each of these recurring concerns.
+
+3. ember is the collection of these constructs and patterns.
+
+4. ember subscribes to convention > configuration. Is opinionated.
+
+5. Involving the diverse open source community in designing new solutions to be part of ember is the best way to ensure only robust features are added to the framework.
+
+6. The web derives it's power from the ability to bookmark and share URLs. Application state should be completely reproducable from a given URL. Don't Break the Web!
+
+7. Hamsters are really cute.
+
+## What does it mean to be an opinionated framework?
+
+Here are some benefits ember receives from being opinionated:
+
+1. ember apps should all look very similar.
+2. Opinionated software is easier to read and debug.
+3. Developers are able to switch between ember projects somewhat seamlessly.
+4. Documentation is more focused, making it more effective.
+5. Allows framework to be more robust.
+
+![](https://s3.amazonaws.com/ember-trainings/ember-trainings/opinionated.gif)
+
+But what does it mean to be opinonated?
+
+**In ember there is an idiomatic(recommended) way to do most things.**
+
+It means that ember is full of recommendations, not just options, on how you should write your ember code.
+
+** Being opinionated also allows ember to refine it's architecture patterns with the larger community.**
+
+### Possible downside...
+
+I have listed some of the benefits of opinionated code bases, but there are drawbacks as well.
+
+##### non-idiomatic ember code can be very difficult to debug.
+
+Developers new to ember, often mix ember constructs incorrectly with paradigms they have used in the past (random jquery snippets or other imperative code outside the ember system). They have a hard time finding out what their errors mean, and are frustrated to realize they must refactor their code to the ember-way™
+
+**This is why ember is said to have a somewhat steep learning curve.**
+
+When framework constructs are being used outside of the recommended way (what is generally covered by the integration tests) unexpected bugs can arise that are hard to track down and lack documentation or stack overflow posts (because others are not doing it that way)!
+
+### But you can trust the hamster!
+
+The patterns ember uses have been around a while and are probably not new to the experienced developer.
+
+**ember at it's core is a MVC framework**, with sprinklings of reactive programming and other functional concepts.
+
+## The MVC Design Pattern
+
+MVC stands for Model View Controller which are names we give to the 3 constructs (usually coded as classes or modules) where we put our application code.
+
+More specifically each route of the application will have its own Model, View, and Controller and the code you write for that route will be split between these three modules.
+
+> In computer science, separation of concerns (SoC) is a design principle for separating a computer program into distinct sections, such that each section addresses a separate concern. A concern is a set of information that affects the code of a computer program. --Wikipedia
+
+The purpose of this is to have good **seperation of concerns** in the application for each route, and the code for each route is also seperate from code for the other routes of your app.
+
+When I say 'route' I mean an area of the applcation, generally you can think of it as a specific page. There is also an Ember.Route construct  which we will cover later in this lesson.
+
+### Ember Specific MVC
+
+ember does not stray too far from conventional MVC representation, but it can look  different if you have not seen these patterns used on the client side.
+
+Below is a representation of ember's flavor of MVC. Most notably, the  view concept in ember is represented by the handlebars template, which is mostly structure (HTML) with minimal logic. The template acesses the controller to fill its dynamic sections.
+
+The controller construct in ember can either be an Ember.Controller or Ember.Component. Both contain state/logic that should not be coupled with the model, but is important to the current route.
+
+A good example would be managing screen state such as filtering, sorting, or toggling options on a form. These two concepts (Controllers and Components) while different in multiple ways, are similar enough that in an upcoming ember release Ember.Component will completely replace Ember.Controller.
+
+However this has not happened yet and both concepts are important to current ember applications and I will cover each one in depth as we build our app.
+
+![](https://s3.amazonaws.com/ember-trainings/ember-trainings/ember_basic_mvc.png)
+
+This diagram gives most of the neccessary information, however a few things I would like to point out:
+
+1. One of the main ideas behind the MVC design is resuability. The model should be a completely self contained unit that does not rely on any other module when executing it's methods. The model should be able to work with any View/Controller combo that would want to use the data that this model represents.
+
+2. Also the pattern goes further than just determining what code belongs in which module. It also dictates the direction of observation, or data flow, of the app. The view (template) must access the model through the controller. Furthermore the model can only be accessed and cannot access anything itself (which is key to its reusabliltiy).
+
 
 ## Getting Started
 
