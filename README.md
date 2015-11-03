@@ -1241,3 +1241,290 @@ export default DS.RESTAdapter.extend({
     namespace: 'api/v1'
 });
 ```
+
+## Review Register Route
+
+New feature time! Lets add a new route where we will review our register on a separate page of the app. Here will will have the option to save our register as well go back to a clear calculator or pick back up where we left off.
+
+Here is what the end result will be:
+
+![review for save img](https://s3.amazonaws.com/ember-trainings/ember-trainings/review_for_save.png)
+
+Beautiful I know.
+
+Lets do what is needed to make our new route:
+
+```bash
+$ ember generate route review
+```
+
+Earlier in the MVC section I described the model in ember as something that is persisted or sent to the server, it normally 'models' a record in the database. In our calculator route we have not yet defined a model, which makes sense as our calculator is all UI and nothing is saved between states, but here is where we save it. So our register that was a controller property for calculator should be our model in the new review route.
+
+Leets add the model function to our route:
+
+```javascript
+export default AuthenticatedRoute.extend({
+    model() {
+        return this.store.createRecord('register', {
+            register: this.controllerFor('calculator').get('registerTape')
+        });
+    }
+    });
+```
+
+Routes have access to all controllers through the controllerFor method. Here we are using it get registerTape from the calculator controller, and use it to populate our model. If you are wondering why wrote the model hook this way and did not pass in the model. That is a great question and I will cover that in depth here shortly. When we go over dynamic vs static routes.
+
+For now lets add our markup for this route's template:
+
+```handlebars
+<div class="row section">
+    <div class="col s12 m10 offset-m1">
+        {{#if model.register}}
+            <div class="large register-content white z-depth-1">
+                {{model.register}}
+            </div>
+        {{/if}}
+    </div>
+</div>
+<div class="row">
+    <div class="col s12 m10 offset-m1">
+        <button class="btn-flat waves-effect waves-light left">
+            <i class="material-icons left">chevron_left</i>
+            Go back
+        </button>
+        <button class="btn waves-effect waves-light right">Save register&hellip;</button>
+        <button class="btn-flat waves-effect waves-light right">Discard register</button>
+    </div>
+</div>
+```
+
+Above we are accessing the register through them model by asking the controller for 'model.register'. This is because the model is stored on the controller in the model property as a means of facilitating the MVC data flow.
+
+So far so good, we have a model being created by the route and the template has styles and markup and it requested the register from the model for rendering. Lets add the actions for our 'go back' and 'discard register'.
+
+```handlebars
+<button class="btn-flat waves-effect waves-light left" {{action "goBack"}}>
+    <i class="material-icons left">chevron_left</i>
+        Go back
+</button>
+<button class="btn-flat waves-effect waves-light right" {{action "discardRegister"}}>Discard register</button>
+```
+
+```javascript
+export default AuthenticatedRoute.extend({
+    model() {
+        return this.store.createRecord('register', {
+            register: this.controllerFor('calculator').get('registerTape');
+        });
+    },
+    actions: {
+        discardRegister() {
+            this.transitionTo('calculator');
+        }
+    }
+});
+```
+
+For the goBack action I want to go back to the last history item in Window.history. This is a very generic function that can be used any where we are in the app. For that reason I am going to put it in the application route which is the top level route that all unhandled actions bubble up to.
+
+Even though Ember has been using your application route it has been creating it at runtime and we don't currently have an application route.
+
+Lets get one:
+
+```bash
+$ ember generate route application
+```
+
+Now add the action:
+
+```javascript
+import Ember from 'ember';
+
+export default Ember.Route.extend({
+    actions: {
+        goBack() {
+            window.history.back();
+        }
+    }
+});
+```
+
+We have the functionality in place from our screen shot lets see more to continue developing our feature.
+
+Here is the result of hitting the save button on the review template:
+
+![save modal img](https://s3.amazonaws.com/ember-trainings/ember-trainings/save_modal.png)
+
+Here we have a modal come up from the bottom of the page requesting we label our register before it can be saved. On the modal we are able to cancel or continue saving, Also you can't see from this screenshot but we should only enable our button once a label is present in the field.
+
+If cancelled we will simply clear the modal.
+
+We are going to add a link on the calculator route to transition us to the review route. Lets add it in the register window itself but only when there is a register to save. Basically we will hide the button when it is not an option to save. Here is the screen shot:
+
+![calculator showing save register link](https://s3.amazonaws.com/ember-trainings/ember-trainings/calc_showing_loaded_function.png)
+
+First lets add our link to the register-tape component:
+
+```handlebars
+<div class="register-window">
+    <div class="register-content">
+        {{{registerDisplay}}}
+    </div>
+</div>
+{{#if hasRegister}}
+    {{#link-to "review" tagName="a" class="btn-floating btn-large keep-register-link"}}
+        <i class="material-icons">save</i>
+    {{/link-to}}
+{{/if}}
+```
+
+Notice we used a link-to handlebar helper this works exactly the same as the transitionTo method that is written in the route objects. It is wrapped in a "if helper" so it only shows when we have a register.
+
+Lets create the  hasRegister property in the component so this works properly:
+
+```javascript
+    hasRegister: Ember.computed.notEmpty('register'),
+```
+
+We have our link working now, you should be able to try it out by going to your calculator and clicking the button to transition to review. We even wrote the code that grabs the register off the controller and makes it your model.
+
+##### check that your app loads and you can hit the link to review...
+
+Ok now on the the save modal functionality:
+
+```bash
+$ ember generate component save-register-modal
+```
+
+The component template:
+
+```handlebars
+<form {{action "saveRegister" content on="submit" }}>
+    <div class="modal-content">
+        <h4>Enter a label for your register</h4>
+        <p class="input-field">
+            {{input type="text" value=content.label}}
+        </p>
+    </div>
+    <div class="modal-footer right-align">
+        <button type="submit" class="btn {{unless hasLabel 'disabled'}}">
+            <i class="material-icons left">save</i>
+            Save register
+        </button>
+        <button type="button" class="btn-flat" {{action "clearSaveModal"}}>cancel</button>
+    </div>
+</form>
+```
+
+The component js file:
+
+```javascript
+import Ember from 'ember';
+
+export default Ember.Component.extend({
+    classNames: ['modal bottom-sheet'],
+    content: null,
+    elementId: 'saveRegisterModal',
+    hasLabel: Ember.computed.notEmpty('content.label'),
+
+    didInsertElement() {
+        var context = this;
+
+        this.$().openModal({
+            ready() {
+                context.$('#saveRegisterModal input:first-of-type').focus();
+            },
+            complete() {
+                context.sendAction('clearSaveModal');
+            }
+        });
+    },
+
+    actions: {
+        saveRegister(register) {
+            this.$().closeModal();
+            this.sendAction('saveRegister', register);
+        },
+        clearSaveModal() {
+            this.$().closeModal();
+            this.sendAction('clearSaveModal');
+        }
+    }
+});
+```
+
+Ok so this is our modal, we needed it to be a component to have access to the didInsertElement hook, which was neccesary for the jquery operation we are doing. Which is an animation, you will see; it is beautiful!
+
+We also have our actions that save the register, and clear the modal, both of these actions perform the closeModal jquery animation.
+
+Finally the hasLabel computed property is the basis for our validation and prevention of the save button being pressed with out a label.
+
+Next we need to generate a single template (with out a route or component):
+
+```bash
+$ ember generate template save-register
+```
+
+We are going to use this template to render our new component into an outlet. **This is required for now because only templates are routable (not components). Will be remedied in 2.4**
+
+now lets fill our empty save-register.hbs with our one line component invocation:
+
+```handlebars
+{{save-register-modal content=model clearSaveModal="clearSaveModal" saveRegister="saveRegister"}}
+```
+
+One other thing to note here I am using the old action bubbling syntax for my component, where I pass in the action name as a string. The reason I am doing this instead of the new syntax is the actions clearSaveModal and SaveRegister are on the route, and we have not needed to define a controller, ember instead is generating a generic controller at runtime.
+
+I don't want to create the controller file and have to pass these down through the controller. So I am using the bubbling. Remember the (action "name") helper only finds functions that match its name on the current context so in this case the undefined controller. This is more just personal preference on my part and not something I would consider a best practice.
+
+For now we have both of these action mechanisms, as we get closer to 3.0 it will be obvious how to refactor our action handling for the future of ember.
+
+now we can create the clearSaveModal and saveRegister functions along with another action that shows the save modal. These are defined back on the review route.
+
+```javascript
+actions: {
+        saveRegister(model) {
+            model.set('date', Date()); //just want string not object
+            let savingPromise = model.save();
+            this.controller.set('savePromise', savingPromise);
+            savingPromise.then(() => {
+                this.transitionTo('calculator');
+            });
+        },
+        showSaveModal() {
+            this.render('save-register',{
+                into: 'application',
+                outlet: 'modal',
+                controller: this.get('controller')
+            });
+        },
+        clearSaveModal() {
+            this.disconnectOutlet('modal');
+        },
+        discardRegister() {
+            this.transitionTo('calculator');
+        }
+}
+```
+You can call this.render anywhere on a route, but it is most often called in it's appropriate route hook, renderTemplate.
+
+In the showSaveModal action we are rendering the save register template (which contains our component) into the modal outlet.
+
+Which we should probably define:
+
+Navigate to your application template we didn't create it but it always exists automatically.
+
+right now it is:
+
+```handlebars
+{{outlet}}
+```
+
+make it:
+
+```handlebars
+{{outlet}}
+{{outlet "modal"}}
+```
+
+Now we can render into the specific modal outlet while out main page remains rendered into the default (unamed) outlet in application.hbs.
