@@ -1241,6 +1241,59 @@ export default DS.RESTAdapter.extend({
     namespace: 'api/v1'
 });
 ```
+### Defining our models with encapslation
+
+Since we are using ember-data there is some fancy stuff given to us, everything we are doing with models can also apply if you are just using an Ember.Object as your model.
+
+lets generate our register model:
+
+```bash
+$ ember generate model register
+```
+Fill in our three properties that we persist for each register:
+
+```javascript
+import DS from 'ember-data';
+
+export default DS.Model.extend({
+    register: DS.attr(),
+    label: DS.attr(),
+    date: DS.attr()
+});
+```
+To rehash the MVC section of this training our models can contain two kinds of code.
+1. properties that will be sent to the server for persistence. Ember-Data has these designated with DS.attr()
+2. Methods and Computed Properties that describe the main properties. These computations must be self contained with in the model, and apply to anywhere the model is used.
+
+Our register model is simple too simple, we only have database properties.
+
+Lets skip ahead and do our other model the user model:
+
+```javascript
+import DS from 'ember-data';
+import Ember from 'ember';
+
+export default DS.Model.extend({
+    username: DS.attr(),
+    password: DS.attr(),
+    isUsernameValid: function() {
+        return this.get('username') && this.get('username').length > 4;
+    }.property('username'),
+    isPasswordValid: function() {
+        return this.get('password') && this.get('password').length > 4;
+    }.property('password'),
+    isValid: Ember.computed.and('isUsernameValid', 'isPasswordValid'),
+    isNotValid: Ember.computed.not('isValid')
+});
+```
+
+This is a much better example validation like this and also formatting (not seen here) are two good kinds of functionality that can decorate a model.
+
+Again anything that is not completely inline with the model's resuability belongs on the controller or somewhere else.
+
+Defining these models in this way allows us to create save and destroy them with ember data methods that called from the store.
+
+We will use this user model later in the training when we do our authentication and session management code.
 
 ## Review Register Route
 
@@ -1486,7 +1539,6 @@ actions: {
         saveRegister(model) {
             model.set('date', Date()); //just want string not object
             let savingPromise = model.save();
-            this.controller.set('savePromise', savingPromise);
             savingPromise.then(() => {
                 this.transitionTo('calculator');
             });
@@ -1528,3 +1580,292 @@ make it:
 ```
 
 Now we can render into the specific modal outlet while out main page remains rendered into the default (unamed) outlet in application.hbs.
+
+So showSaveModal is rendering the modal which inits the component which animates into the screen (because of the code we put in didInsertElement).
+
+clearModal which is tied to the modal cancel button. calls one simple function disconnectOutlet, this route method takes the name of a named outlet and removes what is rendered inside it.
+
+
+Finally we have the saveRegister action, that actually saves the register after a label is passed by the user. In this function we are setting a date on the model, then saving the model, which returns a promise, we chain a then on to transfer back to calculator when we know we have saved.
+
+#### Lets catch our breath.
+
+Ok I feel like we are doing a lot right now, but it is good. As we go use concepts in the app I have already covered, I will move faster. We now have the modal functionalty complete and a direct way to get from calculator to review and from review back to calculator.
+
+There is are a few bugs that we need to handle before we leave review route.
+
+1. When we create a model with ember-data it is remembered at least locally even if not saved. This will create a problem for us if we don't destroy it when leaving the route. However we only want to destroy it if it has not been saved. ember-data gives us away to do this with the isNew property.
+
+2. Since it is a dynamic route our modelhook runs every time. What if we navigate straight to this route '/review' with out building a calcualtor first, an example would be if the user bookmarks the URL. If this happens we won't have a register to find on our calculator controller, since it won't have existed yet.
+There is really no way arounds this as the review route is route that relies on temparary data that it will possibly save. We can't make it a dynamic route (that would be even worse) since there is nothing to lookup based on URL params.
+We just need to handle this the best we can which is if there is no register to show we should redirect back to calculator before we even attempt to create the model.
+
+Here are the two route hooks we will use to fix these edge cases:
+
+```javascript
+    beforeModel() {
+        if (!this.controllerFor('calculator').get('registerTape')) {
+            this.transitionTo('calculator');
+        }
+    },
+    model() {
+        return this.store.createRecord('register', {
+            register: this.controllerFor('calculator').get('registerTape')
+        });
+    },
+    deactivate() {
+        let model = this.modelFor('review');
+
+        if (model.get('isNew')) {
+            model.deleteRecord();
+        }
+    }
+```
+
+The beforeModel hook is the best place to redirect from a route if you need to for some reason (like this), as it is the very first cook fired when a route is entered.
+
+The deactivate hook is fired when the route is exiting. If the model has not been marked as saved we will delete it, a bit counter intuitive I know.
+
+### Have to back track a bit, thanks API for being so secure...
+
+So we finished our review route but it isn't going to be able to save, because those are authenticated only APIs.
+
+I guess we have to switch gears and develop the ability to login and out.
+
+## Authenticated User Sessions
+
+#### Requirements
+
+1. A user should be able to login, and then transitioned to the calculator route.
+2. A user should stay logged in after closing tab/browser (handled by serverside cookies).
+3. A user should be able to logout, and be redirected to the login screen.
+4. A user can be created and then auto-loggedin and transitioned to calculator.
+5. A user should recieve notification of serverside errors when logging in or creating a user.
+
+### Ember.Services
+
+Here is a concept you might not have read about in the Ember Guides although [here](http://guides.emberjs.com/v2.1.0/applications/services/) is the page. Services in ember use mostly concepts we have already covered along with a few new concepts.
+
+#### First the similar:
+
+Services extend Ember.Object and are singleton instances that are created lazily and looked up when needed. All of this is also true of controllers. In fact before services existed we used to use controllers to fill their purpose.
+
+**What purpose is that?**
+
+Services are modules that hold state relating to an application concern and/or provide API functionalty for that concern. However **the main distinction is the services functionality is required by multiple parts of the app.**
+
+Services live for the life of your application and should be used to share state that effects and can be manipulated by multiple routes/controllers/components.
+
+A service can also be used to fetch data that is outside of your normal model system, specifically if that model system is ember data which has strict requirements for how requests are formatted.
+
+A pretty diagram showing the complete Ember System.
+
+![Ember Data Flow](https://s3.amazonaws.com/ember-trainings/ember-trainings/ember_data_flow_complete.png)
+
+### Sessions are a perfect use case for services.
+
+1. login/logout APIs are not RESTful
+
+2. Many places in the app want to know if we are authenticated.
+
+3. Authentication is separate and does not belong on one particular route or controller.
+
+### Service Injection.
+
+Services unlike most things can be easily injected into another Ember.Prototype. A Service can be injected into anything including a plain Ember.Object, or Ember.Component which are otherwise isolated.
+
+Here is the syntax for injecting a service onto another Ember.Prototype:
+
+```
+Ember.Route.extend({
+session: Ember.inject.service()
+})
+```
+It is important that the declared property name be the same as the service name so it can be successfully lookedup.
+
+
+### Making our Session Service
+
+lets generate our session:
+
+```bash
+$ ember generate service session
+```
+
+Here is the code for our services/session.js
+
+```javascript
+import Ember from 'ember';
+
+export default Ember.Service.extend({
+    isAuthenticated: false,
+    apiBase: "https://ember-calc.herokuapp.com/api/v1",
+    attemptedTranstion: null,
+
+    login(username, password) {
+        return new Ember.RSVP.Promise((resolve, reject) => {
+            let url = `${this.get('apiBase')}/login`;
+            let success = () => {
+                this.set('isAuthenticated', true);
+                resolve();
+            };
+            let error = (jqXHR, status, err) => reject(err);
+
+            Ember.$.ajax({
+                method: "POST",
+                data: {"username": username, "password": password},
+                url,
+                success,
+                error
+            });
+        });
+    },
+
+    checkAuth() {
+        return new Ember.RSVP.Promise((resolve, reject) => {
+            let url = `${this.get('apiBase')}/checkAuth`;
+            let success = () => {
+                this.set('isAuthenticated', true);
+                resolve();
+            };
+            let error = () => reject();
+
+            // if marked as authenticated don't bother checking server
+            if (this.get('isAuthenticated')) {
+                resolve();
+                return;
+            }
+
+            Ember.$.ajax({
+                method: "GET",
+                url,
+                success,
+                error
+            });
+        });
+    },
+
+    logout() {
+        return new Ember.RSVP.Promise((resolve, reject) => {
+            let url = `${this.get('apiBase')}/logout`;
+            let success = () => {
+                this.set('isAuthenticated', false);
+                resolve();
+            };
+
+            let error = (jqXHR, status, err) => reject(err);
+
+            Ember.$.ajax({
+                method: "POST",
+                url,
+                success,
+                error,
+                xhrFields: {
+                    withCredentials: true
+                },
+                crossDomain: true
+            });
+        });
+    }
+});
+```
+
+Ok! lots of code, but all concepts you know so I will just talk through what is happening.
+
+1. We are keeping up with authentication status with a property isAuthenticated.
+2. We are storing the apiBase (as we need it here and are outside of ember-data where we used it before).
+3. We have a property attemptedTransition that will potentially hold an ember transition object.
+4. login/logout methods that return promises which set isAuthenticated accordingly.
+5. checkAuth method which checks authenticated by checking the isAuthenticated flag, and if false making a server call to check if our session cookie is valid.
+
+Lets generate our login route:
+
+```bash
+$ ember generate route login
+```
+
+And here is some login route code:
+
+
+```javascript
+import Ember from 'ember';
+
+export default Ember.Route.extend({
+    session: Ember.inject.service(),
+    model() {
+        return Ember.Object.create({
+            username: null,
+            password: null
+        });
+    }
+});
+
+Ember data doesn't work in for this use case since logging in is outside normal CRUD operations. However a regular Ember.Object works perfectly as a model, all we need is a username and password.
+
+Also we are injecting our session service into our login route, we will use it momentarily.
+
+
+login.hbs markup:
+
+```handlebars
+<div class="row section">
+    <div class="col s12 m10 offset-m1 white z-depth-1">
+        <form>
+            <div class="container">
+                <h1>Sign in</h1>
+                <div class="row">
+                    <div class="col s12">
+                        {{#link-to 'user.new'}}Not a user Yet? Sign up!{{/link-to}}
+                    </div>
+                    <div class="col s12">
+                        <div class="row">
+                            <div class="col s12">
+                                {{#if model.errorMessage}}
+                                    <h6 class="error-message">{{model.errorMessage}}</h6>
+                                {{/if}}
+                            </div>
+                            <div class="input-field col s12">
+                                {{input id="username" type="text" value=model.username}}
+                                <label for="username">Username</label>
+                            </div>
+                            <div class="input-field col s12">
+                                {{input id="password" type="password" value=model.password}}
+                                <label for="password">Password</label>
+                            </div>
+                        </div>
+                        <button class="waves-effect waves-light btn" type="submit">Sign in!</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+```
+
+Oh html, why must you look like that? Anyways alot of this is just wrappers for materialize css.
+
+A couple notable things here, We are writing a link-to helper to transition to the user.new route for those not already signed up. We will need to make that route in a minute.
+
+We also have an error message that is trying to render {{model.errorMessage}} however we haven't defined that on our model. We can actually set things on our model at runtime. We will set the error message if there is one, and then it will show up.
+
+Finally it is worth mentioning, though it was covered in the [ember guides](http://guides.emberjs.com/v2.1.0/templates/input-helpers/), that input helpers are really awesome we can pass them any htm5 input type and the property passed to value will always hold the current input value.
+
+#### Logging In
+
+Lets add an action for logging in:
+
+```
+actions: {
+    login(username, password) {
+        this.get('session').login(username, password).then(() => {
+            this.transitionTo('calculator');
+        }, () => {
+            this.get('controller').set('model.errorMessage', 'Incorrect combination of username and password');
+        });
+    }
+}
+```
+
+Our login action will call the login method on our session service, on success will transition us to calculator otherwise it sets errorMessage on the model like previously discussed. Our error messaging could be more robust here, in a real app.
+
+Here is the
