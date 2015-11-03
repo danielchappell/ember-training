@@ -1641,6 +1641,7 @@ I guess we have to switch gears and develop the ability to login and out.
 3. A user should be able to logout, and be redirected to the login screen.
 4. A user can be created and then auto-loggedin and transitioned to calculator.
 5. A user should recieve notification of serverside errors when logging in or creating a user.
+6. An unauthenticated user should be redirected to login when atempting to visit an authenticated route.
 
 ### Ember.Services
 
@@ -1866,6 +1867,119 @@ actions: {
 }
 ```
 
-Our login action will call the login method on our session service, on success will transition us to calculator otherwise it sets errorMessage on the model like previously discussed. Our error messaging could be more robust here, in a real app.
+Our login action will call the login method on our session service, on success will transition us to calculator otherwise it sets errorMessage on the model like previously discussed. In a real world app having more robust error messaging would be desirable.
 
-Here is the
+#### preventing unauthorized access to authenticated routes
+
+All the routes in our app other than login and user.new will require authentication.
+
+So far (other than login)  we have only defined:
+
+* calculator
+* review
+
+We should create a Mixin which allows us to extend the contructor prototype in a specific way grouping logic that can be reused by mixing it in to other classes.
+
+When defining Ember.Mixins you use the create method not the extend method.
+
+Lets create our authenticated route:
+
+```bash
+$ ember generate mixin authenticated
+```
+
+```javascript
+import Ember from 'ember';
+
+export default Ember.Mixin.create({
+    session: Ember.inject.service(),
+    beforeModel(transition) {
+        return this.get('session').checkAuth().catch(() => {
+            transition.abort();
+            this.set('session.attemptedTransition');
+            this.transitionTo('login');
+        });
+    }
+});
+```
+
+The strategy here is simple. we use our injected session service to checkAuth in the beforeModel (the best place to do an early redirect).
+
+The beforeModel has a transition argument that can be arborted and stored, to be retried later. which is what we are doing here, in the catch of the promise (meaning checkAuth returned a negative response). We store the transition in the session.attemptedTransition property we just defined and transition to login.
+
+If the checkAuth is successful we just continue entering the route normally.
+
+lets update our other routes by adding our authentiated mixin:
+
+calculator route:
+
+```javascript
+import Ember from 'ember';
+import Authenticated from '../mixins/authenticated';
+
+export default Ember.Route.extend(Authenticated, {
+    model() {
+        return this.store.findAll('register');
+    },
+    actions: {
+        goToViewRegister(register) {
+            this.transitionTo('view-receipt', register);
+        }
+    }
+});
+```
+
+review route:
+
+```javascript
+import Ember from 'ember';
+import Authenticated from '../mixins/authenticated';
+
+export default Ember.Route.extend(Authenticated, {
+    beforeModel(...args) {
+        this._super(...args);
+        if (!this.controllerFor('calculator').get('registerTape')) {
+            this.transitionTo('calculator');
+        }
+    },
+    model() {
+        return this.store.createRecord('register', {
+            register: this.controllerFor('calculator').get('registerTape')
+        });
+    },
+    deactivate() {
+        let model = this.modelFor('review');
+
+        if (model.get('isNew')) {
+            model.deleteRecord();
+        }
+    },
+    actions: {
+        saveRegister(model) {
+            model.set('date', Date()); //just want string not object
+            let savingPromise = model.save();
+            this.controller.set('savePromise', savingPromise);
+            savingPromise.then(() => {
+                this.transitionTo('calculator');
+            });
+        },
+        showSaveModal() {
+            this.render('save-register',{
+                into: 'application',
+                outlet: 'modal',
+                controller: this.get('controller')
+            });
+        },
+        clearSaveModal() {
+            this.disconnectOutlet('modal');
+        },
+        discardRegister() {
+            this.transitionTo('calculator');
+        }
+    }
+});
+```
+
+Adding a mixin is the same as over writing a method on the prototype. The fact that our Mixin uses beforeModel to detect authentication and redirect, must now be considered when implementing the beforeModel on any authenticated route, like we do in review route.
+
+To fix this call the super method with this._super(..args) to ensure the parent behavior is maintained. In our case the breaking of our authenticated paradigm.
