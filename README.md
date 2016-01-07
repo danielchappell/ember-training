@@ -1800,6 +1800,7 @@ export default Ember.Route.extend({
         });
     }
 });
+```
 
 Ember data doesn't work in for this use case since logging in is outside normal CRUD operations. However a regular Ember.Object works perfectly as a model, all we need is a username and password.
 
